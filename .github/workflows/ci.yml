@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CMAKE_BUILD_TYPE: Release
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} (${{ matrix.backend }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ windows-2022, ubuntu-24.04, macos-14 ]
+        backend: [ AUTO ]
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install CMake (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          python -m pip install --upgrade pip cmake
+      # Windows uses the CMake that ships with Visual Studio.
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy
+
+      - name: Configure (CMake)
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cmake -S . -B build -G "Visual Studio 17 2022" -A x64 \
+                  -DTRIANGLE_RASTERIZER_BACKEND=${{ matrix.backend }} \
+                  -DCMAKE_BUILD_TYPE=Release
+          else
+            cmake -S . -B build \
+                  -DTRIANGLE_RASTERIZER_BACKEND=${{ matrix.backend }} \
+                  -DCMAKE_BUILD_TYPE=Release
+          fi
+
+      - name: Build
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cmake --build build --config Release --parallel
+          else
+            cmake --build build --parallel
+          fi
+
+      - name: Run C tests (ctest)
+        working-directory: build
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ctest --output-on-failure -C Release
+          else
+            ctest --output-on-failure
+          fi
+
+      - name: Run Python tests (standalone runner)
+        run: python tests/python/run_tests.py
+
+      - name: Run demo
+        run: python python/demo.py
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: triangle-rasterizer-${{ runner.os }}-${{ matrix.backend }}
+          path: build/
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Optional CUDA job. Enable on a runner that has an NVIDIA GPU + toolkit,
+  # e.g. a self-hosted runner with label `gpu`, or a cloud GPU service.
+  # The CPU matrix above is the green guarantee on every hosted OS.
+  # ---------------------------------------------------------------------------
+  # cuda:
+  #   name: Linux CUDA
+  #   runs-on: [ self-hosted, linux, gpu ]   # adjust to your runner label
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Install Python dependencies
+  #       run: |
+  #         python -m pip install --upgrade pip numpy
+  #     - name: Configure (CUDA)
+  #       run: >
+  #         cmake -S . -B build
+  #         -DTRIANGLE_RASTERIZER_BACKEND=CUDA
+  #         -DCMAKE_BUILD_TYPE=Release
+  #         -DCMAKE_CUDA_ARCHITECTURES="80;86;90"
+  #     - name: Build
+  #       run: cmake --build build --parallel
+  #     - name: Run C tests
+  #       working-directory: build
+  #       run: ctest --output-on-failure
+  #     - name: Run Python tests (includes CPU/CUDA parity)
+  #       run: python tests/python/run_tests.py
+  #     - name: Run CPU vs CUDA parity example
+  #       run: python examples/cpu_vs_cuda_parity.py

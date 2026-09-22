@@ -1,0 +1,45 @@
+# --- Build outputs ---------------------------------------------------------
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+CMakeSettings.json
+
+# --- Compiled binaries -----------------------------------------------------
+*.obj
+*.o
+*.a
+*.lib
+*.dll
+*.exe
+*.so
+*.dylib
+
+# --- Python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build_py/
+.venv/
+venv/
+
+# --- Test / coverage artifacts -------------------------------------------
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# --- Example outputs ------------------------------------------------------
+examples/output/
+python/output/
+
+# --- Editor / OS ----------------------------------------------------------
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp

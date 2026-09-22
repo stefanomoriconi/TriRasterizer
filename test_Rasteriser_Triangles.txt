@@ -1,0 +1,80 @@
+void drawTriangle(uint8* imgRGB, int* imgSize, int* v0, int* v1, int* v2, uint8* clrRGB, float clrAlpha) 
+{
+    // C-like function
+    // imgRGB is the input/output image in RGB format that will be modified by drawing triangles on top.
+    // imgSize is the 2-array indicating the size of the image in 2D (H, W)
+    // v0, v1, v2 are triangles vertices 2D coordinates expressed as arrays of int[2] -- assumption they belong to imgRGB, i.e. they ALL fall within the image size/bounds -- to be verified.
+    // clrRGB is the 3-vector of colour in RGB space as uint8
+    // clrAplha is the scalar float value indicating the transparency of the target pixel colour with respect to the value of the pixel in the input imageRGB.
+
+    // 0. Verify that all triangle vertices are within the imageSize bounding-box: 0->H, 0->W
+    // ... missing - to be implemented
+
+    // 1. Find bounding box
+    int minX = min(min(v0[0], v1[0]), v2[0]);
+    int minY = min(min(v0[1], v1[1]), v2[1]);
+    int maxX = max(max(v0[0], v1[0]), v2[0]);
+    int maxY = max(max(v0[1], v1[1]), v2[1]);
+
+    // 2. Loop through every pixel in the triangle bounding-box
+    for (int y = minY; y <= maxY; y++) 
+    {
+        for (int x = minX; x <= maxX; x++) 
+        {
+            int[2] p = {x, y};
+            
+            // 3. Check if inside using edge functions
+            isIn = isPinTri(p, v0, v1, v2);
+
+            // 4. Draw if inside all edges
+            if isIn 
+            {
+                drawPixel(imgRGB, imgSize, x, y, clrRGB, clrAlpha);
+            }
+        }
+    }
+}
+
+void drawPixel(uint8* imgRGB, int* imgSize, int x, int y, uint8* clrRGB, float clrAlpha)
+{
+    // C-like function
+    // linear index of the pixel in the 2D image (just one channel, e.g. R)
+    int idx = y*imgSize[1] + x; 
+
+    // linear index offset for the same pixels in other channels (R: 0x, G:1x, B:2x)
+    int RGBoffset = imgSize[0] * imgSize[1]; 
+    
+    // assigning R value to the output pixel
+    imgRGB[idx] = uint8(imgRGB[idx]*(1-clrAlpha)) + uint8(clrRGB[0]*clrAlpha); // casting to uint8
+    // assigning G value to the output pixel
+    imgRGB[idx + RGBoffset] = uint8(imgRGB[idx + RGBoffset]*(1-clrAlpha)) + uint8(clrRGB[1]*clrAlpha); // casting to uint8
+    // assigning B value to the output pixel
+    imgRGB[idx + 2*RGBoffset] = uint8(imgRGB[idx + 2*RGBoffset]*(1-clrAlpha)) + uint8(clrRGB[2]*clrAlpha); // casting to uint8
+}
+
+def isPinTri(p, v0, v1, v2):
+    """
+    Python-like function
+    Checks if point 'p' is inside the triangle formed by v0, v1, and v2.
+    All inputs are tuples or lists of (x, y) coordinates.
+    """
+    # Extract x and y coordinates
+    px, py = p
+    x0, y0 = v0
+    x1, y1 = v1
+    x2, y2 = v2
+
+    # Calculate barycentric coordinates denominator
+    denom = (y1 - y2) * (x0 - x2) + (x1 - x2) * (y2 - y0)
+    
+    # Avoid division by zero for colinear vertices
+    if denom == 0:
+        return False
+
+    # Calculate alpha, beta, and gamma coefficients
+    alpha = ((y1 - y2) * (px - x2) + (x1 - x2) * (y2 - py)) / denom
+    beta = ((y2 - y0) * (px - x2) + (x2 - x0) * (y2 - py)) / denom
+    gamma = 1.0 - alpha - beta
+
+    # Point is inside if all coefficients are greater than or equal to zero
+    return alpha >= 0 and beta >= 0 and gamma >= 0
