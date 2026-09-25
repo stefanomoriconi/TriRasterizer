@@ -335,7 +335,7 @@ static int cpu_fallback_rasterize(unsigned char *img, int width, int height, int
     if (global_minY < 0) global_minY = 0;
     if (global_maxY >= height) global_maxY = height - 1;
 
-    unsigned char *restrict dst = img;
+    unsigned char *__restrict__ dst = img;
     const int w = width, ch = channels;
     const int use_fixed = (precision == TRI_PRECISION_FIXED8);
     for (int y = global_minY; y <= global_maxY; y++) {
@@ -405,9 +405,17 @@ int tri_backend_rasterize(unsigned char *img, int width, int height, int channel
 
     const size_t img_bytes = (size_t)width * (size_t)height * (size_t)channels;
 
-    unsigned char *d_img  = NULL;
-    const BatchTri *d_tri = NULL;
+    unsigned char *d_img = NULL;
+    BatchTri *d_tri = NULL;
     int rc = TRI_OK;
+
+    /* Declared before any `goto done` below (dim3's constructor only depends
+     * on width/height, known up-front) so control never jumps over their
+     * initialization -- C++ (unlike C) forbids that when the label is still
+     * in scope. */
+    dim3 block(16, 16);                                   /* 256 threads */
+    dim3 grid((width  + block.x - 1) / block.x,
+              (height + block.y - 1) / block.y);
 
     cudaError_t e;
     e = cudaMalloc((void **)&d_img, img_bytes);
@@ -419,10 +427,6 @@ int tri_backend_rasterize(unsigned char *img, int width, int height, int channel
     if (e != cudaSuccess) { rc = TRI_ERR_NOMEM; goto done; }
     e = cudaMemcpy(d_tri, tri, count * sizeof(BatchTri), cudaMemcpyHostToDevice);
     if (e != cudaSuccess) { rc = TRI_ERR_NOMEM; goto done; }
-
-    dim3 block(16, 16);                                   /* 256 threads */
-    dim3 grid((width  + block.x - 1) / block.x,
-              (height + block.y - 1) / block.y);
 
     rasterize_kernel<<<grid, block>>>(d_img, width, height, channels, count, d_tri, aa, precision);
     e = cudaGetLastError();

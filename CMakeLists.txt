@@ -64,8 +64,11 @@ if(TRIANGLE_RASTERIZER_BACKEND STREQUAL "CUDA" OR
         set(CMAKE_CUDA_STANDARD 11)
         set(CMAKE_CUDA_STANDARD_REQUIRED ON)
         # Broad SM coverage by default; override with -DCMAKE_CUDA_ARCHITECTURES=...
+        # (75;80;86;90;120 = Turing through Blackwell; older sm_61/70 dropped
+        # since CUDA 13 no longer supports compute_60/compute_70 as a compile
+        # target, see e.g. https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/)
         if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-            set(CMAKE_CUDA_ARCHITECTURES "61;70;75;80;86;89;90")
+            set(CMAKE_CUDA_ARCHITECTURES "75;80;86;90;120")
         endif()
         set(TRI_BACKEND_ACTUAL "CUDA")
     elseif(TRIANGLE_RASTERIZER_BACKEND STREQUAL "CUDA")
@@ -111,6 +114,13 @@ else()
 endif()
 
 target_compile_definitions(triangle_rasterizer PRIVATE TRIANGLE_RASTERIZER_BUILDING)
+
+# raster_internal.h uses lround()/floor()/ceil() etc. from <math.h>; on glibc
+# these require linking libm explicitly (it is not implicitly pulled in the
+# way some other libc's do it).
+if(NOT MSVC)
+    target_link_libraries(triangle_rasterizer PRIVATE m)
+endif()
 
 # CPU backend: link OpenMP when requested and available.
 if(TRI_BACKEND_ACTUAL STREQUAL "CPU" AND TRIANGLE_RASTERIZER_OPENMP)

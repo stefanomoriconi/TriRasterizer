@@ -8,19 +8,19 @@ version = "1.3.0"
 description = "Data-race-free 2D triangle rasterizer (OpenMP CPU / CUDA GPU) with a stable C ABI and a Python (ctypes) wrapper."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = { text = "CC-BY-NC-4.0" }
 authors = [
-    { name = "Triangle Rasterizer Contributors" },
+    { name = "Stefano Moriconi" },
 ]
 keywords = [
     "rasterizer", "triangle", "opengl", "vulkan", "opengl-style",
     "openmp", "cuda", "gpu", "rasterisation", "2d-graphics",
 ]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
+    "License :: Free for non-commercial use",
     "Operating System :: OS Independent",
     "Programming Language :: C",
     "Programming Language :: Python :: 3",
@@ -44,9 +44,9 @@ dependencies = [
 img = ["pillow>=9.0"]
 dev = ["pytest>=7.0", "pillow>=9.0"]
 
-# [project.urls]  # set these to point at your real GitHub repository
-# Homepage = "https://github.com/<org>/triangle-rasterizer"
-# Source =   "https://github.com/<org>/triangle-rasterizer"
+[project.urls]
+Homepage = "https://github.com/stefanomoriconi/TriRasterizer"
+Source =   "https://github.com/stefanomoriconi/TriRasterizer"
 
 [tool.setuptools]
 # Only the pure-Python wrapper package is shipped via pip.  The compiled

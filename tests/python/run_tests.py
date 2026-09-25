@@ -36,6 +36,16 @@ def _load_test_module():
 def main() -> int:
     module = _load_test_module()
 
+    # `pytest.skip()` (used by test_cuda_parity_if_available for non-CUDA
+    # builds) raises pytest's `Skipped`, which subclasses `BaseException`
+    # (not `Exception`) -- so a plain `except Exception` does not catch it.
+    # Detect it (if pytest is importable) so a skip is reported and handled
+    # gracefully instead of crashing this whole standalone runner.
+    try:
+        from _pytest.outcomes import Skipped as _Skipped
+    except Exception:  # pytest not installed, or internals changed
+        _Skipped = ()
+
     tests = []
     for name in sorted(vars(module)):
         if name.startswith("test_"):
@@ -51,10 +61,14 @@ def main() -> int:
     print("-" * 64)
 
     failures = []
+    skipped = []
     for name, fn in tests:
         try:
             fn()
             print("PASS  %s" % name)
+        except _Skipped as e:
+            skipped.append(name)
+            print("SKIP  %s (%s)" % (name, e))
         except Exception:
             failures.append(name)
             print("FAIL  %s" % name)
@@ -64,7 +78,8 @@ def main() -> int:
     if failures:
         print("[FAIL] %d/%d tests failed: %s" % (len(failures), len(tests), ", ".join(failures)))
         return 1
-    print("[PASS] %d/%d python tests passed" % (len(tests), len(tests)))
+    suffix = (" (%d skipped)" % len(skipped)) if skipped else ""
+    print("[PASS] %d/%d python tests passed%s" % (len(tests) - len(skipped), len(tests), suffix))
     return 0
 
 
