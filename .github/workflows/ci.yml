@@ -41,7 +41,10 @@ jobs:
       - name: Configure (CMake)
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
-            cmake -S . -B build -G "Visual Studio 17 2022" -A x64 \
+            # Let CMake auto-detect the installed VS generator/toolset rather
+            # than hardcoding a version string, which can drift out of sync
+            # with the VS version preinstalled on windows-latest runners.
+            cmake -S . -B build -A x64 \
                   -DTRIANGLE_RASTERIZER_BACKEND=${{ matrix.backend }} \
                   -DCMAKE_BUILD_TYPE=Release
           else
