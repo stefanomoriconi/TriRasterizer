@@ -647,8 +647,9 @@ Each example is runnable directly: `python examples/basic_render.py`.
 * run the demo,
 * upload the built binaries as artifacts.
 
-A separate job can be enabled on a CUDA-enabled runner to exercise the GPU
-backend; the CPU path is the green guarantee on every OS.
+All three OS jobs pass (see "CI hardening" below for the bugs found and fixed
+to get there). A separate job can be enabled on a CUDA-enabled runner to
+exercise the GPU backend; the CPU path is the green guarantee on every OS.
 
 ## Design notes & limitations
 
@@ -722,6 +723,39 @@ test runner) used `except Exception:` to catch `pytest.skip()`, but pytest's
 machine with pytest installed, running the CPU-only build via this runner
 crashed the entire suite instead of reporting one clean skip. Fixed by
 explicitly catching `_pytest.outcomes.Skipped` and reporting it as `SKIP`.
+
+### CI hardening (October 2026)
+
+The CI workflow itself was fixed and verified end-to-end on GitHub-hosted
+runners (previously it had never once passed since the repository was
+created):
+
+* A stale hardcoded `-G "Visual Studio 17 2022"` CMake generator string no
+  longer matched the Visual Studio version preinstalled on
+  `windows-latest`/`windows-2022` runners. Fixed by letting CMake
+  auto-detect the generator (`-A x64` only).
+* **Two genuine SSE2-only correctness bugs** in the CPU backend's opaque
+  constant-fill fast path (`src/backend_cpu.c`), invisible on non-x86
+  development machines (ARM64) where the scalar fallback is always used
+  instead, were found once the Ubuntu CI job finally ran on real x86_64
+  hardware:
+  1. `span_fill_opaque_rgba`'s blend mask was `_mm_set1_epi8(0xff)` (every
+     byte taken from the new colour), so the untouched alpha byte of an
+     RGBA image was always overwritten with 0 instead of being preserved.
+     Fixed with a per-byte mask (`0xff,0xff,0xff,0x00` repeated per pixel)
+     so the alpha byte is correctly taken from the destination.
+  2. `span_fill_opaque_rgb` wrote 2 RGB pixels (6 bytes) via a single
+     8-byte `_mm_storel_epi64` store. A 3-byte pixel stride does not divide
+     evenly into an 8-byte store, so every other pixel in an opaque RGB
+     fill span was corrupted with shifted/zeroed channel values. There is
+     no clean SIMD store width for a 3-byte stride, so this fast path was
+     removed; opaque RGB fills now use the same scalar per-pixel writer as
+     every other non-RGBA code path.
+  Both bugs were confirmed by cross-compiling the test suite for x86_64 and
+  running it under QEMU user-mode emulation from the ARM64 development
+  machine (since that machine cannot otherwise exercise the SSE2 path),
+  reproducing the exact CI failures, then verifying the fix resolves them
+  under the same emulation. CI now passes on Windows, macOS, *and* Linux.
 
 ---
 
