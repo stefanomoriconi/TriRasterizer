@@ -117,15 +117,16 @@ static inline long tri_fx_ceil_div(long a) {
 }
 
 /* ---------------------------------------------------------------------------
- * Opaque constant-fill span writers (used by the AA_NONE path when the alpha
+ * Opaque constant-fill span writer (used by the AA_NONE path when the alpha
  * reaches >= 1.0, i.e. a pure fill of the constant RGB triple over the row
  * span).  The output byte values are computed with the EXACT same
  * tri_to_byte255 as the scalar writer, so the result is bit-identical.  The
  * only change is the store width: SSE2 stores 4 pixels per 16-byte lane
- * (RGBA, preserving the untouched 4th alpha byte) or 2 pixels per 8-byte lane
- * (RGB).  The semi-transparent blend path stays on the scalar per-pixel writer
- * because it is genuinely per-channel/per-pixel and would not be bit-identical
- * in SIMD.
+ * (RGBA, preserving the untouched 4th alpha byte via a byte mask).  There is
+ * no SIMD fast path for 3-channel RGB: its 3-byte-per-pixel stride does not
+ * divide evenly into any SIMD lane width, so it stays on the scalar
+ * per-pixel writer below (as does the semi-transparent blend path, which is
+ * genuinely per-channel/per-pixel and would not be bit-identical in SIMD).
  * ------------------------------------------------------------------------- */
 #if defined(__SSE2__)
 #include <emmintrin.h>
@@ -138,7 +139,13 @@ static void span_fill_opaque_rgba(const unsigned char *row, int x_start, int x_e
                                      (int)r, (int)g, (int)b, 0,
                                      (int)r, (int)g, (int)b, 0,
                                      (int)r, (int)g, (int)b, 0);
-        __m128i mask = _mm_set1_epi8(0xff);
+        /* 0xff for the R,G,B bytes of each pixel, 0x00 for the alpha byte,
+         * so the alpha byte is taken from `dst` (preserved) rather than from
+         * the placeholder 0 in `c`. */
+        __m128i mask = _mm_setr_epi8((char)0xff, (char)0xff, (char)0xff, 0,
+                                     (char)0xff, (char)0xff, (char)0xff, 0,
+                                     (char)0xff, (char)0xff, (char)0xff, 0,
+                                     (char)0xff, (char)0xff, (char)0xff, 0);
         __m128i dst  = _mm_loadu_si128((const __m128i *)p);
         __m128i out  = _mm_or_si128(_mm_and_si128(c, mask),
                                     _mm_andnot_si128(mask, dst));
@@ -147,23 +154,6 @@ static void span_fill_opaque_rgba(const unsigned char *row, int x_start, int x_e
     }
     for (; x <= x_end; x++) {
         unsigned char *p = (unsigned char *)row + (size_t)x * 4;
-        p[0] = r; p[1] = g; p[2] = b;
-    }
-}
-
-static void span_fill_opaque_rgb(const unsigned char *row, int x_start, int x_end,
-                                 unsigned char r, unsigned char g, unsigned char b) {
-    int x = x_start;
-    while (x + 2 <= x_end + 1) {
-        const unsigned char *p = row + (size_t)x * 3;
-        __m128i v = _mm_setr_epi8((int)r, (int)g, (int)b, 0,
-                                  (int)r, (int)g, (int)b, 0,
-                                  0, 0, 0, 0, 0, 0, 0, 0);
-        _mm_storel_epi64((__m128i *)p, v);
-        x += 2;
-    }
-    for (; x <= x_end; x++) {
-        unsigned char *p = (unsigned char *)row + (size_t)x * 3;
         p[0] = r; p[1] = g; p[2] = b;
     }
 }
@@ -242,8 +232,7 @@ int tri_backend_rasterize(unsigned char *img, int width, int height, int channel
                 const unsigned char bb = tri_to_byte255(b);
                 unsigned char *row = dst + (size_t)y * (size_t)w * (size_t)ch;
 #if defined(__SSE2__)
-                if (ch == 4)      span_fill_opaque_rgba(row, x_start, x_end, rb, gb, bb);
-                else if (ch == 3) span_fill_opaque_rgb (row, x_start, x_end, rb, gb, bb);
+                if (ch == 4) span_fill_opaque_rgba(row, x_start, x_end, rb, gb, bb);
                 else
 #endif
                 {
